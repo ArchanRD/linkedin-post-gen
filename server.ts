@@ -9,6 +9,16 @@ import { EventItem, PostImageLayout, PostTone } from './src/types';
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 
 // In-memory persistent event store initialized with mock data
@@ -471,7 +481,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, 'dist');
+    const distPath = path.resolve(process.cwd(), 'dist');
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
       app.get('*', (_req: Request, res: Response) => {
@@ -485,4 +495,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// In standard Node / AI Studio / Cloud Run container, start listening.
+// In Vercel serverless functions, Vercel imports and wraps `app`.
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
