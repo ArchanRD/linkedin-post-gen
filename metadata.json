@@ -1,0 +1,9 @@
+{
+  "name": "EngagePulse LinkedIn Post Generator",
+  "description": "AI-powered LinkedIn post and multi-layout visual generator for event organizers and attendees.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
+
