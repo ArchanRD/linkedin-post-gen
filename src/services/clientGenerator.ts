@@ -89,18 +89,29 @@ export function createClientEventGraphic(
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+const REAL_CONFERENCE_PHOTOS = [
+  'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
+];
+
 export function generateClientFallbackPost(request: GeneratePostRequest): GeneratedPostResponse {
   const {
     eventName,
     communityName,
     communitySocialLink,
-    layout = 'dual-split',
+    layout = 'text-up-image-below',
     tone = 'Enthusiastic & Inspiring',
     attendeeNotes,
+    customPrompt,
+    imagePrompt,
     keyTakeaways = [],
   } = request;
 
-  const count = layout === 'single-hero' ? 1 : layout === 'dual-split' ? 2 : layout === 'triptych-grid' ? 3 : 4;
+  // Generate minimum 5 images for every layout as requested
+  const count = 5;
   const themes: ('hero' | 'keynote' | 'networking' | 'workshop' | 'showcase')[] = [
     'hero',
     'keynote',
@@ -112,18 +123,41 @@ export function generateClientFallbackPost(request: GeneratePostRequest): Genera
   const images: GeneratedImageItem[] = [];
   for (let i = 0; i < count; i++) {
     const theme = themes[i % themes.length];
+    const photoKeywords = imagePrompt && imagePrompt.trim().length > 0
+      ? `${imagePrompt.trim()} ${theme}`
+      : theme === 'keynote' ? 'keynote speaker presentation stage lighting conference audience'
+      : theme === 'networking' ? 'tech professionals networking conference lounge discussion coffee'
+      : theme === 'workshop' ? 'interactive developer workshop laptops coding presentation room'
+      : theme === 'showcase' ? 'tech conference exhibition floor modern booth presentation'
+      : 'large tech conference mainstage auditorium crowd lighting 8k';
+
+    // Generates real AI photograph dynamically using Flux photorealistic synthesis
+    const realPhotoUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`${photoKeywords} photorealistic modern tech event`)}?width=1200&height=800&nologo=true&model=flux&seed=${i * 73 + 17}`;
+
     images.push({
       id: `client-img-${Date.now()}-${i}`,
-      url: createClientEventGraphic(eventName, communityName, theme, i),
+      url: realPhotoUrl,
       alt: `${eventName} - ${theme}`,
       caption: `${communityName} • ${theme.toUpperCase()}`,
+      modelUsed: 'Nano Banana Compatible (Flux Synthesized)',
     });
   }
 
   const cleanCommunityTag = communityName.replace(/\s+/g, '');
   const cleanEventTag = eventName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
 
-  const postCopy = `Just wrapped up an incredible session at ${eventName} hosted by ${communityName}!
+  // If user provided a specific prompt, build directly from their prompt directives without inventing unrequested content
+  let postCopy: string;
+  if (customPrompt && customPrompt.trim().length > 0) {
+    postCopy = `${customPrompt.trim()}
+
+${attendeeNotes ? `Personal note: "${attendeeNotes}"\n\n` : ''}Attended ${eventName} hosted by ${communityName} (${communitySocialLink}).
+
+What are your thoughts on this? Let's connect in the comments below! 👇
+
+#${cleanEventTag} #${cleanCommunityTag} #TechCommunity #Innovation #Leadership`;
+  } else {
+    postCopy = `Just wrapped up an incredible session at ${eventName} hosted by ${communityName}!
 
 When ambitious builders and passionate practitioners come together under one roof, the collective momentum is undeniable. Here are 3 core realizations that stood out to me:
 
@@ -136,10 +170,11 @@ ${attendeeNotes ? `💡 Personal highlight from my notes:\n"${attendeeNotes}"\n\
 What was your biggest technical or leadership takeaway this month? I'd love to hear your thoughts in the comments below! 👇
 
 #${cleanEventTag} #${cleanCommunityTag} #TechCommunity #Leadership #Engineering #Innovation #ContinuousLearning`;
+  }
 
   return {
     postText: postCopy,
-    headlineHook: `Just wrapped up an incredible session at ${eventName} hosted by ${communityName}!`,
+    headlineHook: customPrompt ? customPrompt.split('\n')[0].slice(0, 100) : `Just wrapped up an incredible session at ${eventName} hosted by ${communityName}!`,
     keyTakeaways: keyTakeaways.length > 0 ? keyTakeaways : [
       'Prioritize autonomous execution and rapid feedback cycles.',
       'Community knowledge-sharing accelerates real engineering outcomes.',

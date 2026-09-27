@@ -30,7 +30,12 @@ export interface EventItem {
   createdAt: string;
 }
 
-export type PostImageLayout = 'single-hero' | 'dual-split' | 'triptych-grid' | 'quad-mosaic';
+export type PostImageLayout = 
+  | 'text-up-image-below'
+  | 'text-left-image-right'
+  | 'text-right-image-left'
+  | 'image-only'
+  | 'text-on-image-fullscreen';
 
 export interface LayoutOption {
   id: PostImageLayout;
@@ -38,7 +43,7 @@ export interface LayoutOption {
   subtitle: string;
   imageCount: number;
   description: string;
-  wireframe: '1' | '1+1' | '1+2' | '2x2';
+  wireframe: 'text-up' | 'text-left' | 'text-right' | 'image-only' | 'text-overlay';
 }
 
 export type PostTone = 
@@ -57,10 +62,20 @@ export interface GeneratePostRequest {
   description?: string;
   keyTakeaways?: string[];
   attendeeNotes?: string;
+  customPrompt?: string; // Content prompt for Gemini text model
+  imagePrompt?: string;  // Dedicated image prompt for Nano Banana image model
   tone: PostTone;
   layout: PostImageLayout;
   userName?: string;
   userHeadline?: string;
+}
+
+export interface GenerateImagesRequest {
+  eventName: string;
+  communityName: string;
+  layout: PostImageLayout;
+  imagePrompt?: string;
+  description?: string;
 }
 
 export interface GeneratedImageItem {
@@ -69,6 +84,7 @@ export interface GeneratedImageItem {
   alt: string;
   caption?: string;
   aspectRatio?: string;
+  modelUsed?: string;
 }
 
 export interface GeneratedPostResponse {
@@ -80,4 +96,7 @@ export interface GeneratedPostResponse {
   images: GeneratedImageItem[];
   layout: PostImageLayout;
   generatedAt: string;
+  imagePrompt?: string;
+  contentPrompt?: string;
+  imageModelUsed?: string;
 }

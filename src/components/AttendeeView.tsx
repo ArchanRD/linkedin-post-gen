@@ -40,16 +40,69 @@ export const AttendeeView: React.FC<AttendeeViewProps> = ({
 }) => {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialSelectedEventId || null);
   const [activeTab, setActiveTab] = useState<'brief' | 'generator'>('brief');
-  const [selectedLayout, setSelectedLayout] = useState<PostImageLayout | null>('dual-split');
+  const [selectedLayout, setSelectedLayout] = useState<PostImageLayout | null>('text-up-image-below');
   const [selectedTone, setSelectedTone] = useState<PostTone>('Enthusiastic & Inspiring');
   const [attendeeNotes, setAttendeeNotes] = useState('');
+  const [customPrompt, setCustomPrompt] = useState(
+    "Write an authentic, punchy first-person post about today's sessions. Include 3 specific takeaways, thank the host community, and ask readers for their experience with agent architectures. Keep sentences short, engaging, and free of generic corporate buzzwords."
+  );
+  // Dedicated prompt for Nano Banana Image Generation
+  const [imagePrompt, setImagePrompt] = useState(
+    "A high-end cinematic photo of a modern tech convention keynote mainstage with vibrant neon lighting, an inspiring speaker at the podium, and an engaged audience in the auditorium, 8k editorial photography, photorealistic, sharp focus."
+  );
   
   // Generation states
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRegeneratingContent, setIsRegeneratingContent] = useState(false);
+  const [isRegeneratingImages, setIsRegeneratingImages] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<'idle' | 'generating' | 'complete'>('idle');
   const [generatedPost, setGeneratedPost] = useState<GeneratedPostResponse | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
+
+  // Quick Content Prompt Recipe Templates (Gemini 3.8 Flash)
+  const PROMPT_RECIPES = [
+    {
+      label: '🚀 Contrarian Hot Take',
+      prompt: 'Write a bold, provocative hook questioning current AI industry complexity. Share 3 sharp realizations on why practical autonomous execution beats bloated architectures. End by asking readers if they agree or disagree.',
+    },
+    {
+      label: '💡 3 Actionable Frameworks',
+      prompt: 'Break down 3 tangible engineering principles learned from today\'s keynote speakers. Keep each point crisp, practical, and devoid of corporate clichés. Conclude with a question on modern stacks.',
+    },
+    {
+      label: '🤝 Community & Gratitude',
+      prompt: 'Focus warmly on the authentic energy of the community and the high-caliber builders in attendance. Give a sincere shoutout to the organizing team and speakers, inviting folks to connect.',
+    },
+    {
+      label: '🎯 Executive Summary',
+      prompt: 'Draft an executive briefing for tech leads: highlight macro industry direction, deployment velocity, and key operational takeaways in clear bullet points.',
+    },
+  ];
+
+  // Quick Image Generation Presets (Gemini Nano Banana Model)
+  const IMAGE_PROMPT_RECIPES = [
+    {
+      label: '📸 Keynote Mainstage & Crowd',
+      prompt: 'Wide cinematic master photo of the keynote mainstage with vibrant neon blue and amber stage lighting, an engaging speaker at the podium, and an attentive tech audience in the auditorium, 8k editorial photography, photorealistic.',
+    },
+    {
+      label: '🎙️ Speaker Spotlight & Bokeh',
+      prompt: 'Dynamic close-up portrait of the keynote speaker presenting with a handheld microphone, warm cinematic bokeh background with event visual displays, sharp focus, natural lighting.',
+    },
+    {
+      label: '👥 Peer Networking Lounge',
+      prompt: 'Engaging modern convention networking lounge with diverse tech professionals in thoughtful discussion holding coffee cups, warm ambient venue interior, documentary style.',
+    },
+    {
+      label: '💻 Hands-on Coding Lab',
+      prompt: 'Interactive developer lab and coding workshop with attendees collaborating around open laptops with code on screens, interactive classroom environment, sharp vivid colors.',
+    },
+    {
+      label: '🌐 Futuristic Tech Expo',
+      prompt: 'Expansive high-tech exhibition floor with glowing demo booths, modern digital displays, and curious attendees discovering software showcases, cinematic wide-angle.',
+    },
+  ];
 
   // Set initial selected event if provided
   useEffect(() => {
@@ -85,7 +138,7 @@ export const AttendeeView: React.FC<AttendeeViewProps> = ({
     }
   };
 
-  // Trigger Parallel Post Generation
+  // Trigger Parallel Post Generation (Content + Images)
   const handleGeneratePost = async () => {
     if (!currentEvent || !selectedLayout) return;
 
@@ -103,6 +156,8 @@ export const AttendeeView: React.FC<AttendeeViewProps> = ({
         description: currentEvent.description,
         keyTakeaways: currentEvent.keyTakeaways,
         attendeeNotes: attendeeNotes.trim(),
+        customPrompt: customPrompt.trim(),
+        imagePrompt: imagePrompt.trim(),
         tone: selectedTone,
         layout: selectedLayout,
         userName: user.name,
@@ -116,6 +171,64 @@ export const AttendeeView: React.FC<AttendeeViewProps> = ({
       setGenerationProgress('idle');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Regenerate only the post copy using Gemini 3.8 Flash
+  const handleRegenerateContentOnly = async () => {
+    if (!currentEvent || !generatedPost) return;
+    try {
+      setIsRegeneratingContent(true);
+      const res = await api.generatePostContentOnly({
+        eventName: currentEvent.name,
+        communityName: currentEvent.communityName,
+        communitySocialLink: currentEvent.communitySocialLink,
+        date: currentEvent.date,
+        description: currentEvent.description,
+        keyTakeaways: currentEvent.keyTakeaways,
+        attendeeNotes: attendeeNotes.trim(),
+        customPrompt: customPrompt.trim(),
+        tone: selectedTone,
+        userName: user.name,
+        userHeadline: user.headline,
+      });
+      setGeneratedPost((prev) => prev ? {
+        ...prev,
+        postText: res.postText,
+        headlineHook: res.headlineHook,
+        keyTakeaways: res.keyTakeaways,
+        hashtags: res.hashtags,
+        contentPrompt: customPrompt.trim(),
+      } : null);
+    } catch (err) {
+      alert('Content regeneration failed: ' + (err as Error).message);
+    } finally {
+      setIsRegeneratingContent(false);
+    }
+  };
+
+  // Regenerate only the 5 images using Gemini Nano Banana
+  const handleRegenerateImagesOnly = async () => {
+    if (!currentEvent || !generatedPost || !selectedLayout) return;
+    try {
+      setIsRegeneratingImages(true);
+      const res = await api.generatePostImagesOnly({
+        eventName: currentEvent.name,
+        communityName: currentEvent.communityName,
+        layout: selectedLayout,
+        description: currentEvent.description,
+        imagePrompt: imagePrompt.trim(),
+      });
+      setGeneratedPost((prev) => prev ? {
+        ...prev,
+        images: res.images,
+        imagePrompt: imagePrompt.trim(),
+        imageModelUsed: res.images[0]?.modelUsed || 'Gemini Nano Banana',
+      } : null);
+    } catch (err) {
+      alert('Image regeneration failed: ' + (err as Error).message);
+    } finally {
+      setIsRegeneratingImages(false);
     }
   };
 
@@ -522,6 +635,119 @@ export const AttendeeView: React.FC<AttendeeViewProps> = ({
         <div className="space-y-8">
           {/* Controls Bar: Tone & Layout Selection */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
+            
+            {/* 1. Custom Post Content Writing Prompt / Directives (Gemini 3.8 Flash) */}
+            <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <div>
+                  <label className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600" />
+                    <span>1. Post Content Prompt (Gemini 3.8 Flash Model)</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                      Dynamic Copywriting
+                    </span>
+                  </label>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Provide instructions for the post text (angle, takeaways, tone, or specific themes). Gemini 3.8 Flash will generate authentic, non-generic copy based on your directives.
+                  </p>
+                </div>
+              </div>
+
+              <textarea
+                rows={3}
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="e.g. Write an authentic, punchy first-person post about today's sessions. Include 3 specific takeaways, thank the host community, and ask readers for their experience with agent architectures. Keep sentences short, engaging, and free of generic corporate buzzwords."
+                className="w-full p-3.5 text-xs sm:text-sm rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 text-slate-900 placeholder:text-slate-400 bg-white leading-relaxed font-sans"
+              />
+
+              {/* Quick Content Prompt Template Recipes */}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Content Prompt Templates (Click to apply)
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {PROMPT_RECIPES.map((recipe, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      disabled={isGenerating || isRegeneratingContent}
+                      onClick={() => setCustomPrompt(recipe.prompt)}
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-xl bg-white hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 border border-slate-200 text-slate-700 transition-all text-left cursor-pointer active:scale-95 shadow-2xs"
+                    >
+                      {recipe.label}
+                    </button>
+                  ))}
+                  {customPrompt && (
+                    <button
+                      type="button"
+                      disabled={isGenerating || isRegeneratingContent}
+                      onClick={() => setCustomPrompt('')}
+                      className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-600 transition-colors cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Separate Image Generation Prompt (Nano Banana Model) */}
+            <div className="space-y-3 p-4 rounded-2xl bg-amber-50/50 border border-amber-200/80">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <div>
+                  <label className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>2. Image Generation Prompt (Gemini Nano Banana Model)</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                      Min 5 Images Created
+                    </span>
+                  </label>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Specify the visual scene, atmosphere, lighting, and subjects. Gemini Nano Banana will create a multi-perspective set of minimum 5 images formatted to your layout.
+                  </p>
+                </div>
+              </div>
+
+              <textarea
+                rows={3}
+                value={imagePrompt}
+                onChange={(e) => setImagePrompt(e.target.value)}
+                placeholder="e.g. A high-end cinematic photo of a modern tech convention keynote mainstage with vibrant neon lighting, an inspiring speaker at the podium, and an engaged audience in the auditorium, 8k editorial photography, photorealistic, sharp focus."
+                className="w-full p-3.5 text-xs sm:text-sm rounded-xl border border-amber-300/80 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 text-slate-900 placeholder:text-slate-400 bg-white leading-relaxed font-sans"
+              />
+
+              {/* Quick Image Prompt Presets */}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] font-bold text-amber-800/80 uppercase tracking-wider block">
+                  Image Scene Presets (Click to apply)
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {IMAGE_PROMPT_RECIPES.map((recipe, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      disabled={isGenerating || isRegeneratingImages}
+                      onClick={() => setImagePrompt(recipe.prompt)}
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-xl bg-white hover:bg-amber-100 hover:text-amber-900 hover:border-amber-400 border border-amber-200 text-slate-700 transition-all text-left cursor-pointer active:scale-95 shadow-2xs"
+                    >
+                      {recipe.label}
+                    </button>
+                  ))}
+                  {imagePrompt && (
+                    <button
+                      type="button"
+                      disabled={isGenerating || isRegeneratingImages}
+                      onClick={() => setImagePrompt('')}
+                      className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 transition-colors cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Tone Selector */}
             <div>
               <label className="block text-sm font-semibold text-slate-900 mb-1">
@@ -568,7 +794,7 @@ export const AttendeeView: React.FC<AttendeeViewProps> = ({
               <div className="text-xs text-slate-500 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                 <span>
-                  Parallel Execution: Gemini 3.8 Flash (Text) + Gemini Image Model
+                  Parallel Execution: Gemini 3.8 Flash (Custom Prompt) + Gemini Nano Banana (Real Images)
                 </span>
               </div>
 
@@ -586,7 +812,7 @@ export const AttendeeView: React.FC<AttendeeViewProps> = ({
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Generate LinkedIn Post &amp; Images</span>
+                    <span>Generate Post &amp; 5 Images (Nano Banana)</span>
                   </>
                 )}
               </button>
@@ -633,18 +859,55 @@ export const AttendeeView: React.FC<AttendeeViewProps> = ({
           {/* LinkedIn Style Preview (Shown when generation is complete) */}
           {generatedPost && !isGenerating && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">
-                  Interactive LinkedIn Post Preview
-                </h2>
-                <button
-                  type="button"
-                  onClick={handleGeneratePost}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Regenerate Content</span>
-                </button>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Interactive LinkedIn Post Preview
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Content generated by Gemini 3.8 Flash • Visuals generated by Gemini Nano Banana
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isRegeneratingContent || isGenerating}
+                    onClick={handleRegenerateContentOnly}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {isRegeneratingContent ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                    )}
+                    <span>Regenerate Copy (Gemini)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isRegeneratingImages || isGenerating}
+                    onClick={handleRegenerateImagesOnly}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-xs font-semibold text-amber-900 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {isRegeneratingImages ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    )}
+                    <span>Regenerate 5 Images (Nano Banana)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isGenerating || isRegeneratingContent || isRegeneratingImages}
+                    onClick={handleGeneratePost}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Regenerate Both</span>
+                  </button>
+                </div>
               </div>
 
               <LinkedInPostPreview

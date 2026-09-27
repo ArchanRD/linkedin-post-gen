@@ -191,5 +191,49 @@ export const api = {
     // Client-side fallback generation engine — produces high-fidelity post copy & multi-layout visual cards
     return generateClientFallbackPost(request);
   },
+
+  // Regenerate only post copy with Gemini 3.8 Flash
+  async generatePostContentOnly(request: {
+    eventName: string;
+    communityName: string;
+    communitySocialLink: string;
+    date: string;
+    description?: string;
+    keyTakeaways?: string[];
+    attendeeNotes?: string;
+    customPrompt?: string;
+    tone?: string;
+    userName?: string;
+    userHeadline?: string;
+  }): Promise<{ postText: string; headlineHook: string; keyTakeaways: string[]; hashtags: string[] }> {
+    const res = await fetch('/api/gemini/generate-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to generate post copy: status ${res.status}`);
+    }
+    return await res.json();
+  },
+
+  // Regenerate only 5 images with Nano Banana models
+  async generatePostImagesOnly(request: {
+    eventName: string;
+    communityName: string;
+    layout: string;
+    description?: string;
+    imagePrompt?: string;
+  }): Promise<{ images: any[] }> {
+    const res = await fetch('/api/gemini/generate-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to generate images: status ${res.status}`);
+    }
+    return await res.json();
+  },
 };
 
